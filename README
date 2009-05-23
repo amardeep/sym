@@ -1,0 +1,6 @@
+** Compiling
+
+*** Compile trimesh2 library
+
+    cd trimesh2 && make
+
