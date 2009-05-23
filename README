@@ -4,3 +4,19 @@
 
     cd trimesh2 && make
 
+    If successful, you should have a lib and bin directory. For eg.,
+    on my machine, i am able to
+
+    ./trimesh2/bin.Linux64/mesh_view data/Bunny.ply
+
+    to see stanford bunny model.
+
+
+** Some sample code
+
+   model-info shows some basic stats about a ply model.
+   cd sample && make
+   ./model-info ../data/Bunny.ply
+
+
+
