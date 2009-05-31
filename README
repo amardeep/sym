@@ -11,6 +11,9 @@
 
     to see stanford bunny model.
 
+*** Install computational graphics library
+    
+    sudo apt-get install libcgal-demo libcgal-dev
 
 ** Some sample code
 

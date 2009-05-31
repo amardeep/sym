@@ -1,0 +1,6 @@
+** Model Info
+
+   | Bunny.ply         | 33502 vertices  | 67000 faces  |
+   | Face.ply          | 30495 vertices  | 59999 faces  |
+   | xyzrgb_dragon.ply | 270002 vertices | 540000 faces |
+
