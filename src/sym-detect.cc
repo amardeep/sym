@@ -679,8 +679,10 @@ int main(int argc, char **argv)
   // pick up 1000 random points to match
   set<int> pdash;
   int nv = mesh->vertices.size();
+  int index = 0;
   while (pdash.size() < 1000) {
-    int index = (int)((double)rand() / ((double)RAND_MAX + 1) * nv);
+    //int index = (int)((double)rand() / ((double)RAND_MAX + 1) * nv);
+    index++;
     pdash.insert(index);
   }
 
@@ -692,11 +694,13 @@ int main(int argc, char **argv)
     int i = *iter;
     float ak1 = mesh->curv1[i];
     float ak2 = mesh->curv2[i];
+    if (ak1 < 0 && ak2 < 0) {ak1 = -ak1; ak2 = -ak2;}
     ak1 = ak1 / sqrt(1 + ak1 * ak1);
     ak2 = ak2 / sqrt(1 + ak2 * ak2);
     for (int j = 0; j < nv; ++j) {
-      float bk1 = copy->curv1[j];
-      float bk2 = copy->curv2[j];
+      float bk1 = mesh->curv1[j];
+      float bk2 = -mesh->curv2[j];
+      if (bk1 < 0 && bk2 < 0) {bk1 = -bk1; bk2 = -bk2;}
       bk1 = bk1 / sqrt(1 + bk1 * bk1);
       bk2 = bk2 / sqrt(1 + bk2 * bk2);
       if (abs(ak1-bk1) < eps && abs(ak2-bk2) < eps) {
