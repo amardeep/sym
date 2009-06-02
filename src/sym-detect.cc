@@ -19,6 +19,9 @@ vector<xform> xforms;
 vector<bool> visible;
 vector<string> xffilenames;
 
+vector<pair<int, int> > corr;
+int corrindex = 0;
+
 TriMesh::BSphere global_bsph;
 xform global_xf;
 GLCamera camera;
@@ -241,6 +244,28 @@ void redraw()
     setup_lighting(i);
     draw_mesh(i);
   }
+  glBegin(GL_POINTS);
+  glPointSize(10);
+  TriMesh* m1 = meshes.at(0);
+  TriMesh* m2 = meshes.at(1);
+  glClear (GL_COLOR_BUFFER_BIT);
+  glColor3f (.5, .5, 1.0);
+  for (int i = corrindex; i < corrindex + 10; ++i) {
+    if (i >= corr.size()) break;
+    int a = corr[i].first;
+    int b = corr[i].second;
+    //glVertex3f(m1->vertices[a][0], m1->vertices[a][1], m1->vertices[a][2]);
+    //glVertex3f(m2->vertices[b][0], m2->vertices[b][1], m2->vertices[b][2]);
+    glPushMatrix();
+    glTranslatef(m1->vertices[a][0], m1->vertices[a][1], m1->vertices[a][2]);
+    glutSolidSphere(5, 20, 20);
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(m2->vertices[b][0], m2->vertices[b][1], m2->vertices[b][2]);
+    glutSolidSphere(5, 20, 20);
+    glPopMatrix();
+  }
+  glEnd();
 
   glPopMatrix();
   glutSwapBuffers();
@@ -520,6 +545,10 @@ void keyboardfunc(unsigned char key, int x, int y)
       draw_2side = !draw_2side; break;
     case 'e':
       draw_edges = !draw_edges; break;
+    case 'u':
+      corrindex += 10;
+      if (corrindex >= corr.size()) corrindex = 0;
+      break;
     case 'f':
       draw_falsecolor = !draw_falsecolor; break;
     case 'l':
@@ -657,7 +686,8 @@ int main(int argc, char **argv)
 
   // compute correspondences
   int nmatches = 0;
-  float eps = .00001;
+  float eps = .0001;
+  corr.clear();
   for (set<int>::iterator iter = pdash.begin(); iter != pdash.end(); ++iter) {
     int i = *iter;
     float ak1 = mesh->curv1[i];
@@ -671,6 +701,8 @@ int main(int argc, char **argv)
       bk2 = bk2 / sqrt(1 + bk2 * bk2);
       if (abs(ak1-bk1) < eps && abs(ak2-bk2) < eps) {
         nmatches++;
+        printf("m: %f %f - %f %f (%d %d)\n", ak1, ak2, bk1, bk2, i, j);
+        corr.push_back(make_pair(i, j));
         vec t = mesh->vertices[i] - copy->vertices[j];
         xform r1(copy->pdir1[j][0], copy->pdir1[j][1], copy->pdir1[j][2], 0,
                  copy->pdir2[j][0], copy->pdir2[j][1], copy->pdir2[j][2], 0,
@@ -687,6 +719,8 @@ int main(int argc, char **argv)
     }
   }
   printf("\nnmatches: %d/%d\n", nmatches, nv * 1000);
+
+
 
   glutCreateWindow(argv[1]);
   glutDisplayFunc(redraw);
