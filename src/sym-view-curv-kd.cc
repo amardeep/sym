@@ -9,6 +9,8 @@
 #include <string>
 #include <iostream>
 #include <set>
+#include <limits>
+#include "ANN.h"
 
 using namespace std;
 
@@ -226,6 +228,51 @@ void draw_mesh(int i)
 		glPolygonMode(GL_FRONT, GL_FILL);
 	}
 
+        const TriMesh* m1 = themesh;
+        int j = corrindex;
+        while(true) {
+          int a = corr[j].first;
+          int b = corr[j].second;
+          if (a != corr[corrindex].first) {
+            corrindex = j;
+            break;
+          }
+
+          vec v1 = m1->vertices[a];
+          vec v2 = m1->vertices[b];
+          vec v = v1 - v2;
+          v = normalize(v);
+          float e1 = v DOT (m1->normals[a] + m1->normals[b]);
+          float e2 = v DOT (m1->pdir1[a] + m1->pdir1[b]);
+          float e3 = v DOT (m1->pdir2[b] + m1->pdir2[b]);
+          float e = sqrt(e1*e1 + e2*e2 + e3*e3);
+
+          glPushMatrix();
+          glColor4f (.5, .5, 1.0, .6);
+          glTranslatef(m1->vertices[a][0],
+                       m1->vertices[a][1],
+                       m1->vertices[a][2]);
+          //glutSolidSphere(4, 20, 20);
+          glutSolidSphere(.004, 20, 20);
+          //glutSolidSphere(40, 20, 20);
+          //cout << m1->vertices[a] << endl;
+          glPopMatrix();
+
+          glPushMatrix();
+          glColor4f (1, .5, .5, .6);
+          //cout << "error: " << e << endl;
+          if (e < 1.5) glColor4f (.5, 1, .5, .6);
+          glTranslatef(m1->vertices[b][0],
+                       m1->vertices[b][1],
+                       m1->vertices[b][2]);
+          glutSolidSphere(.004, 20, 20);
+          glPopMatrix();
+          ++j;
+          if (j >= corr.size()) j=0;
+        }
+        glColor3f (1, 1, 1.0);
+
+
 	glPopMatrix();
 }
 
@@ -244,29 +291,6 @@ void redraw()
     setup_lighting(i);
     draw_mesh(i);
   }
-  glBegin(GL_POINTS);
-  glPointSize(10);
-  TriMesh* m1 = meshes.at(0);
-  TriMesh* m2 = meshes.at(1);
-  glClear (GL_COLOR_BUFFER_BIT);
-  glColor3f (.5, .5, 1.0);
-  for (int i = corrindex; i < corrindex + 10; ++i) {
-    if (i >= corr.size()) break;
-    int a = corr[i].first;
-    int b = corr[i].second;
-    //glVertex3f(m1->vertices[a][0], m1->vertices[a][1], m1->vertices[a][2]);
-    //glVertex3f(m2->vertices[b][0], m2->vertices[b][1], m2->vertices[b][2]);
-    glPushMatrix();
-    glTranslatef(m1->vertices[a][0], m1->vertices[a][1], m1->vertices[a][2]);
-    glutSolidSphere(5, 20, 20);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(m2->vertices[b][0], m2->vertices[b][1], m2->vertices[b][2]);
-    glutSolidSphere(5, 20, 20);
-    glPopMatrix();
-  }
-  glEnd();
-
   glPopMatrix();
   glutSwapBuffers();
   printf("\r                        \r%.1f msec.", 1000.0f * (now() - t));
@@ -281,7 +305,7 @@ void update_bsph()
 	point boxmax(-1e38, -1e38, -1e38);
 	bool some_vis = false;
 	for (int i = 0; i < meshes.size(); i++) {
-		if (!visible[i])	
+		if (!visible[i])
 			continue;
 		some_vis = true;
 		point c = xforms[i] * meshes[i]->bsphere.center;
@@ -298,7 +322,7 @@ void update_bsph()
 	gc = 0.5f * (boxmin + boxmax);
 	gr = 0.0f;
 	for (int i = 0; i < meshes.size(); i++) {
-		if (!visible[i])	
+		if (!visible[i])
 			continue;
 		point c = xforms[i] * meshes[i]->bsphere.center;
 		float r = meshes[i]->bsphere.r;
@@ -546,7 +570,7 @@ void keyboardfunc(unsigned char key, int x, int y)
     case 'e':
       draw_edges = !draw_edges; break;
     case 'u':
-      corrindex += 10;
+      //corrindex += 10;
       if (corrindex >= corr.size()) corrindex = 0;
       break;
     case 'f':
@@ -583,9 +607,46 @@ void copyMesh(const TriMesh* src, TriMesh* dest) {
   dest->faces = src->faces;
 }
 
-xform aget_xform(TriMesh* m, TriMesh* c, int i, int j) {
+ANNkd_tree* create_kdtree(TriMesh* mesh) {
+  int nv = mesh->vertices.size();
+  // compute kd tree for curvature values
+  ANNpointArray points = annAllocPts(nv, 2);
+  // fill point memory
+  for (int row = 0; row < nv; ++row) {
+    points[row][0] = mesh->curv1[row];
+    points[row][1] = mesh->curv2[row];
+  }
+  // create kd-tree
+  return new ANNkd_tree(points, nv, 2);
+}
+
+
+const int nn = 30; // no. of neighbours
+void nearest_neighbors(ANNkd_tree* kdtree, TriMesh* mesh, int row, float rad,
+                      vector<int>* matches) {
+  // copy row into annpoint
+  ANNpoint point = annAllocPt(2);
+  point[0] = mesh->curv1[row];
+  point[1] = mesh->curv2[row];
+
+  // search in kdtree
+  ANNidxArray idx = new ANNidx[nn];
+  ANNdistArray dists = new ANNdist[nn];
+  kdtree->annkFRSearch(point, rad, nn, idx, dists);
+
+  for (int i = 0; i < nn; ++i) {
+    if (idx[i] == ANN_NULL_IDX) break;
+    matches->push_back(idx[i]);
+    cout << idx[i] << endl;
+  }
+
+  delete[] idx;
+  delete[] dists;
+}
+
+
+xform get_xform(TriMesh* m, TriMesh* c, int i, int j) {
   vec t = m->vertices[i] - c->vertices[j];
-  cout << "t= " << t << endl;
   xform r1(c->pdir1[j][0], c->pdir1[j][1], c->pdir1[j][2], 0,
            c->pdir2[j][0], c->pdir2[j][1], c->pdir2[j][2], 0,
            c->normals[j][0], c->normals[j][1], c->normals[j][2], 0,
@@ -595,52 +656,7 @@ xform aget_xform(TriMesh* m, TriMesh* c, int i, int j) {
            m->pdir2[i][0], m->pdir2[i][1], m->pdir2[i][2], 0,
            m->normals[i][0], m->normals[i][1], m->normals[i][2], 0,
            0, 0, 0, 1);
-  cout << "comp: " << r1 * r2 << endl;
   xform comp = r1*r2*xform::trans(t[0], t[1], t[2]);
-  return comp;
-}
-
-xform get_xform1(TriMesh* m, TriMesh* c, int i, int j) {
-  vec t = m->vertices[i] - c->vertices[j];
-  cout << "t= " << t << endl;
-  xform r1(c->pdir1[j][0], c->pdir1[j][1], c->pdir1[j][2], 0,
-           c->pdir2[j][0], c->pdir2[j][1], c->pdir2[j][2], 0,
-           c->normals[j][0], c->normals[j][1], c->normals[j][2], 0,
-           0, 0, 0, 1);
-  r1 = inv(r1);
-  xform r2(m->pdir1[i][0], m->pdir1[i][1], m->pdir1[i][2], 0,
-           m->pdir2[i][0], m->pdir2[i][1], m->pdir2[i][2], 0,
-           m->normals[i][0], m->normals[i][1], m->normals[i][2], 0,
-           0, 0, 0, 1);
-
-  vec v1 = m->vertices[i];
-  vec v2 = c->vertices[j];
-  xform x1 = xform::trans(-v1[0], -v1[1], -v1[2]);
-  xform x2 = xform::trans(v2[0], v2[1], v2[2]);
-  xform x = x2 * r2 * r1 * x;
-  cout << "comp-x: " << x << endl;
-  return x;
-}
-
-xform get_xform2(TriMesh* m, TriMesh* c, int i, int j) {
-  vec t = m->vertices[i] - c->vertices[j];
-  cout << "t= " << t << endl;
-  printf("%f %f %f %f\n", m->curv1[i], m->curv2[i],
-         c->curv1[j], c->curv2[j]);
-  xform r1(c->pdir1[j][0], c->pdir1[j][1], c->pdir1[j][2], 0,
-           c->pdir2[j][0], c->pdir2[j][1], c->pdir2[j][2], 0,
-           c->normals[j][0], c->normals[j][1], c->normals[j][2], 0,
-           0, 0, 0, 1);
-  //r1 = inv(r1);
-  xform r2(m->pdir1[i][0], m->pdir1[i][1], m->pdir1[i][2], 0,
-           m->pdir2[i][0], m->pdir2[i][1], m->pdir2[i][2], 0,
-           m->normals[i][0], m->normals[i][1], m->normals[i][2], 0,
-           0, 0, 0, 1);
-  xform rot = r1 * inv(r2);
-  t = rot * m->vertices[i];
-  t = c->vertices[j] - t;
-  cout << "newt= " << t << endl;
-  xform comp = xform::trans(t[0], t[1], t[2]) * rot;
   return comp;
 }
 
@@ -667,6 +683,13 @@ int main(int argc, char **argv)
   cout << "com: " << cm << endl;
   //trans(mesh, cm * -1.0f);
 
+  //lmsmooth(mesh, 50);
+
+  mesh->need_curvatures();
+  float smoothsigma = 2.0;
+  smoothsigma *= mesh->feature_size();
+  //diffuse_curv(mesh, smoothsigma);
+
   mesh->need_normals();
   mesh->need_tstrips();
   mesh->need_bsphere();
@@ -678,19 +701,18 @@ int main(int argc, char **argv)
   printf("%s %s\n", filename, xffilename.c_str());
   xforms.push_back(xform());
   visible.push_back(true);
-  string trfilename = xffilename;
 
 
   // create a copy of the face
   TriMesh *copy = new TriMesh();
   copyMesh(mesh, copy);
-  //scale(copy, -1, 1, 1);
-  //faceflip(copy);
+  scale(copy, -1, 1, 1);
+  faceflip(copy);
   copy->need_normals();
   copy->need_tstrips();
   copy->need_bsphere();
   //pca_rotate(copy);
-  meshes.push_back(copy);
+  //meshes.push_back(copy);
 
   string copyfilename = string(filename);
   copyfilename.replace(copyfilename.length() - 4, 4, "-ref.ply");
@@ -700,22 +722,158 @@ int main(int argc, char **argv)
   xforms.push_back(xform());
   visible.push_back(true);
 
+  // print few curvature values
   mesh->need_curvatures();
   copy->need_curvatures();
-  mesh->need_dcurv();
-  copy->need_dcurv();
+  //mesh->need_dcurv();
+  //copy->need_dcurv();
+  //diffuse_curv(copy, smoothsigma);
+  for (int i = 0; i < mesh->vertices.size(); ++i) {
+    if (i > 10) break;
 
-  TriMesh *tr = new TriMesh();
-  copyMesh(mesh, tr);
-  xform x;
-  x.read(trfilename);
-  apply_xform(tr, x);
-  cout << x << endl;
+    printf("Curvature %d: %f %f\n", mesh->curv1[i], mesh->curv2[i]);
+  }
 
-  tr->need_normals();
-  tr->need_curvatures();
-  xform y = get_xform2(mesh, tr, 1010, 1010);
-  cout << y << endl;
+  // let's see how many points we can prune
+  int numprune = 0;
+  float gamma = .75;
+  float mingc = numeric_limits<float>::infinity();
+  float maxgc = 0;
+  for (int i = 0; i < mesh->vertices.size(); ++i) {
+    float k1 = mesh->curv1[i];
+    float k2 = mesh->curv2[i];
+    k1 = k1 / sqrt(1 + k1 * k1);
+    k2 = k2 / sqrt(1 + k2 * k2);
+    float gc = k1 * k2;
+    if (abs(gc) < mingc) {
+      mingc = abs(gc);
+    }
+    if (abs(gc) > maxgc) {
+      maxgc = abs(gc);
+    }
+    float ratio = abs(k2/k1);
+    if (ratio > gamma) {
+      numprune++;
+    }
+  }
+  printf("Num pruned: %d/%d\n", numprune, mesh->vertices.size());
+  printf("gc %f %f\n", mingc, maxgc);
+
+  int nv = mesh->vertices.size();
+
+  
+  // pick up 1000 random points to match
+  set<int> pdash;
+
+  int index = 0;
+  while (pdash.size() < 100) {
+    int index = (int)((double)rand() / ((double)RAND_MAX + 1) * nv);
+    //index++;
+    pdash.insert(index);
+  }
+
+  // no, lets pick samples
+  //ifstream fin("sample.txt");
+  //pdash.clear();
+  //while(fin >> index) {
+  //pdash.insert(index);
+  //}
+
+  // create kd tree from curvature values
+  // ANNkd_tree* tree = create_kdtree(mesh);
+  // set<pair<int, int> > scorr;
+  float eps = .00001;
+  // ofstream fout("o.txt");
+  // ofstream fcluster("m.txt");
+  // TriMesh *m = mesh;
+  // for (set<int>::iterator iter = pdash.begin(); iter != pdash.end(); ++iter) {
+  //   int i = *iter;
+  //   vector<int> matches;
+  //   nearest_neighbors(tree, mesh, i, eps, &matches);
+  //   for (int iter2 = 0; iter2 < matches.size(); ++iter2) {
+  //     int j = matches[iter2];
+  //     if (i < j) {
+  //       scorr.insert(make_pair(i, j));
+  //     } else {
+  //       scorr.insert(make_pair(j, i));
+  //     }
+  //     corr.push_back(make_pair(i, j));
+
+  //     vec v1 = m->vertices[i];
+  //     vec v2 = m->vertices[j];
+  //     vec vd = v2 - v1;
+  //     float lvd = len(vd);
+  //     vec v = normalize(vd);
+  //     float e1 = v DOT (m->normals[i] + m->normals[j]);
+  //     float e2 = v DOT (m->pdir1[i] + m->pdir1[j]);
+  //     float e3 = v DOT (m->pdir2[i] + m->pdir2[j]);
+  //     float e = sqrt(e1*e1 + e2*e2 + e3*e3);
+
+  //     if (e > 1.5) continue;
+  //     vec c = ((v1 DOT v) + lvd/2) * v;
+  //     fout << c[0] << " " << c[1] << " " << c[2] << endl;
+
+  //     xform comp = get_xform(mesh, copy, i , j);
+  //     cout << "here" << endl;
+  //     for (int m = 0; m < 16; ++m) {
+  //       if (m%4 == 3) continue;
+  //       float o = comp[m];
+  //       //if (m < 12) o *= 100;
+  //       fcluster << o << " ";
+  //     }
+  //     fcluster << endl;
+
+  //   }
+  // }
+  // printf("corr: %d %d\n", corr.size(), scorr.size());
+
+
+  // compute correspondences
+  int nmatches = 0;
+
+  // for (set<pair<int, int> >::iterator iter = scorr.begin();
+  //      iter != scorr.end(); ++iter) {
+  //   int i = iter->first;
+  //   int j = iter->second;
+  //   //printf("%d %d\n", i, j);
+  // }
+
+  for (set<int>::iterator iter = pdash.begin(); iter != pdash.end(); ++iter) {
+    int i = *iter;
+    float ak1 = mesh->curv1[i];
+    float ak2 = mesh->curv2[i];
+    ak1 = ak1 / sqrt(1 + ak1 * ak1);
+    ak2 = ak2 / sqrt(1 + ak2 * ak2);
+    for (int j = 0; j < nv; ++j) {
+      float bk1 = mesh->curv1[j];
+      float bk2 = mesh->curv2[j];
+      bk1 = bk1 / sqrt(1 + bk1 * bk1);
+      bk2 = bk2 / sqrt(1 + bk2 * bk2);
+      float dist;
+      dist = abs(ak1-bk1) < eps && abs(ak2-bk2);
+      dist = sqrt((ak1-bk1)*(ak1-bk1) + (ak2-bk2)*(ak2-bk2));
+      if (dist < eps) {
+        nmatches++;
+        //printf("m: %f %f - %f %f (%d %d)\n", ak1, ak2, bk1, bk2, i, j);
+        corr.push_back(make_pair(i, j));
+        vec t = mesh->vertices[i] - copy->vertices[j];
+        xform r1(copy->pdir1[j][0], copy->pdir1[j][1], copy->pdir1[j][2], 0,
+                 copy->pdir2[j][0], copy->pdir2[j][1], copy->pdir2[j][2], 0,
+                 copy->normals[j][0], copy->normals[j][1], copy->normals[j][2], 0,
+                 0, 0, 0, 1);
+        r1 = inv(r1);
+        xform r2(mesh->pdir1[i][0], mesh->pdir1[i][1], mesh->pdir1[i][2], 0,
+                 mesh->pdir2[i][0], mesh->pdir2[i][1], mesh->pdir2[i][2], 0,
+                 mesh->normals[i][0], mesh->normals[i][1], mesh->normals[i][2], 0,
+                 0, 0, 0, 1);
+        xform comp = r1*r2*xform::trans(t[0], t[1], t[2]);
+        //cout << t << endl;
+      }
+    }
+  }
+  printf("\nnmatches: %d/%d\n", nmatches, nv * 1000);
+
+
 
   glutCreateWindow(argv[1]);
   glutDisplayFunc(redraw);

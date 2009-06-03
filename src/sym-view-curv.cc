@@ -615,6 +615,8 @@ int main(int argc, char **argv)
   cout << "com: " << cm << endl;
   //trans(mesh, cm * -1.0f);
 
+  lmsmooth(mesh, 500);
+
   mesh->need_normals();
   mesh->need_tstrips();
   mesh->need_bsphere();
@@ -690,17 +692,17 @@ int main(int argc, char **argv)
   int nv = mesh->vertices.size();
   int index = 0;
   while (pdash.size() < 1000) {
-    //int index = (int)((double)rand() / ((double)RAND_MAX + 1) * nv);
-    index++;
+    int index = (int)((double)rand() / ((double)RAND_MAX + 1) * nv);
+    //index++;
     pdash.insert(index);
   }
 
   // no, lets pick samples
-  ifstream fin("sample.txt");
-  pdash.clear();
-  while(fin >> index) {
-    pdash.insert(index);
-  }
+  //ifstream fin("sample.txt");
+  //pdash.clear();
+  //while(fin >> index) {
+  //pdash.insert(index);
+  //}
 
   // compute correspondences
   int nmatches = 0;
@@ -710,14 +712,17 @@ int main(int argc, char **argv)
     int i = *iter;
     float ak1 = mesh->curv1[i];
     float ak2 = mesh->curv2[i];
-    //ak1 = ak1 / sqrt(1 + ak1 * ak1);
-    //ak2 = ak2 / sqrt(1 + ak2 * ak2);
+    ak1 = ak1 / sqrt(1 + ak1 * ak1);
+    ak2 = ak2 / sqrt(1 + ak2 * ak2);
     for (int j = 0; j < nv; ++j) {
       float bk1 = mesh->curv1[j];
       float bk2 = mesh->curv2[j];
-      //bk1 = bk1 / sqrt(1 + bk1 * bk1);
-      //bk2 = bk2 / sqrt(1 + bk2 * bk2);
-      if (abs(ak1-bk1) < eps && abs(ak2-bk2) < eps) {
+      bk1 = bk1 / sqrt(1 + bk1 * bk1);
+      bk2 = bk2 / sqrt(1 + bk2 * bk2);
+      float dist;
+      dist = abs(ak1-bk1) < eps && abs(ak2-bk2);
+      dist = sqrt((ak1-bk1)*(ak1-bk1) + (ak2-bk2)*(ak2-bk2));
+      if (dist < eps) {
         nmatches++;
         //printf("m: %f %f - %f %f (%d %d)\n", ak1, ak2, bk1, bk2, i, j);
         corr.push_back(make_pair(i, j));
