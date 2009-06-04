@@ -112,7 +112,7 @@ int main(int argc, char **argv)
   // compute correspondences
   int nv = mesh->vertices.size();
   int nmatches = 0;
-  float eps = .00005;
+  float eps = .00001;
 
   // output file for correspondences and transformations
   string corrfile = projname + "-corr.txt";

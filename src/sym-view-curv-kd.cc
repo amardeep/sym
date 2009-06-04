@@ -257,7 +257,7 @@ void draw_mesh(int i)
           glTranslatef(m1->vertices[a][0],
                        m1->vertices[a][1],
                        m1->vertices[a][2]);
-          glutSolidSphere(4, 20, 20);
+          glutSolidSphere(.004, 20, 20);
           //glutSolidSphere(.004, 20, 20);
           //glutSolidSphere(40, 20, 20);
           //cout << m1->vertices[a] << endl;
@@ -270,7 +270,7 @@ void draw_mesh(int i)
           glTranslatef(m1->vertices[b][0],
                        m1->vertices[b][1],
                        m1->vertices[b][2]);
-          glutSolidSphere(4, 20, 20);
+          glutSolidSphere(.004, 20, 20);
           glPopMatrix();
           ++j;
           if (j >= corr.size()) j=0;
@@ -691,7 +691,7 @@ int main(int argc, char **argv)
   //lmsmooth(mesh, 50);
 
   mesh->need_curvatures();
-  float smoothsigma = 3.0;
+  float smoothsigma = 2.0;
   smoothsigma *= mesh->feature_size();
   cout << "feature size " << mesh->feature_size() << endl;
   diffuse_curv(mesh, smoothsigma);
@@ -846,7 +846,7 @@ int main(int argc, char **argv)
   //   //printf("%d %d\n", i, j);
   // }
 
-  float eps = .002;
+  float eps = .0005;
   int num = 0;
   for (set<int>::iterator iter = pdash.begin(); iter != pdash.end(); ++iter) {
     int i = *iter;
@@ -865,8 +865,8 @@ int main(int argc, char **argv)
       bk1 = bk1 / sqrt(1 + bk1 * bk1);
       bk2 = bk2 / sqrt(1 + bk2 * bk2);
       float dist;
-      dist = abs(ak1-bk1) + abs(ak2-bk2);
-      //dist = sqrt((ak1-bk1)*(ak1-bk1) + (ak2-bk2)*(ak2-bk2));
+      //dist = abs(ak1-bk1) + abs(ak2-bk2);
+      dist = sqrt((ak1-bk1)*(ak1-bk1) + (ak2-bk2)*(ak2-bk2));
       //dist = abs(ak1*bk1 - ak2*bk2);
       if (dist < eps) {
         nmatches++;

@@ -535,7 +535,7 @@ void keyboardfunc(unsigned char key, int x, int y)
       printf("current mode = %d / %d\n", current_mode, modes.size());
       break;
     case 'y':
-      current_mode = -1;
+      current_mode -= 1;
       if (current_mode < -1) current_mode = modes.size() - 1;
       printf("current mode = %d / %d\n", current_mode, modes.size());
       break;
