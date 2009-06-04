@@ -9,6 +9,7 @@
 #include <string>
 #include <iostream>
 #include <set>
+#include "common.h"
 
 using namespace std;
 
@@ -36,6 +37,7 @@ bool draw_falsecolor = false;
 bool draw_index = false;
 bool white_bg = false;
 
+xform mode;
 
 // Make some mesh current
 void set_current(int i)
@@ -577,73 +579,6 @@ void keyboardfunc(unsigned char key, int x, int y)
 }
 
 
-void copyMesh(const TriMesh* src, TriMesh* dest) {
-  // For now, we just copy the faces and vertices.
-  dest->vertices = src->vertices;
-  dest->faces = src->faces;
-}
-
-xform aget_xform(TriMesh* m, TriMesh* c, int i, int j) {
-  vec t = m->vertices[i] - c->vertices[j];
-  cout << "t= " << t << endl;
-  xform r1(c->pdir1[j][0], c->pdir1[j][1], c->pdir1[j][2], 0,
-           c->pdir2[j][0], c->pdir2[j][1], c->pdir2[j][2], 0,
-           c->normals[j][0], c->normals[j][1], c->normals[j][2], 0,
-           0, 0, 0, 1);
-  r1 = inv(r1);
-  xform r2(m->pdir1[i][0], m->pdir1[i][1], m->pdir1[i][2], 0,
-           m->pdir2[i][0], m->pdir2[i][1], m->pdir2[i][2], 0,
-           m->normals[i][0], m->normals[i][1], m->normals[i][2], 0,
-           0, 0, 0, 1);
-  cout << "comp: " << r1 * r2 << endl;
-  xform comp = r1*r2*xform::trans(t[0], t[1], t[2]);
-  return comp;
-}
-
-xform get_xform1(TriMesh* m, TriMesh* c, int i, int j) {
-  vec t = m->vertices[i] - c->vertices[j];
-  cout << "t= " << t << endl;
-  xform r1(c->pdir1[j][0], c->pdir1[j][1], c->pdir1[j][2], 0,
-           c->pdir2[j][0], c->pdir2[j][1], c->pdir2[j][2], 0,
-           c->normals[j][0], c->normals[j][1], c->normals[j][2], 0,
-           0, 0, 0, 1);
-  r1 = inv(r1);
-  xform r2(m->pdir1[i][0], m->pdir1[i][1], m->pdir1[i][2], 0,
-           m->pdir2[i][0], m->pdir2[i][1], m->pdir2[i][2], 0,
-           m->normals[i][0], m->normals[i][1], m->normals[i][2], 0,
-           0, 0, 0, 1);
-
-  vec v1 = m->vertices[i];
-  vec v2 = c->vertices[j];
-  xform x1 = xform::trans(-v1[0], -v1[1], -v1[2]);
-  xform x2 = xform::trans(v2[0], v2[1], v2[2]);
-  xform x = x2 * r2 * r1 * x;
-  cout << "comp-x: " << x << endl;
-  return x;
-}
-
-xform get_xform2(TriMesh* m, TriMesh* c, int i, int j) {
-  vec t = m->vertices[i] - c->vertices[j];
-  cout << "t= " << t << endl;
-  printf("%f %f %f %f\n", m->curv1[i], m->curv2[i],
-         c->curv1[j], c->curv2[j]);
-  xform r1(c->pdir1[j][0], c->pdir1[j][1], c->pdir1[j][2], 0,
-           c->pdir2[j][0], c->pdir2[j][1], c->pdir2[j][2], 0,
-           c->normals[j][0], c->normals[j][1], c->normals[j][2], 0,
-           0, 0, 0, 1);
-  //r1 = inv(r1);
-  xform r2(m->pdir1[i][0], m->pdir1[i][1], m->pdir1[i][2], 0,
-           m->pdir2[i][0], m->pdir2[i][1], m->pdir2[i][2], 0,
-           m->normals[i][0], m->normals[i][1], m->normals[i][2], 0,
-           0, 0, 0, 1);
-  xform rot = r1 * inv(r2);
-  t = rot * m->vertices[i];
-  t = c->vertices[j] - t;
-  cout << "newt= " << t << endl;
-  xform comp = xform::trans(t[0], t[1], t[2]) * rot;
-  return comp;
-}
-
 
 int main(int argc, char **argv)
 {
@@ -652,7 +587,7 @@ int main(int argc, char **argv)
   glutInit(&argc, argv);
 
   if (argc < 2) {
-    cerr << "Usage: " << argv[0] << " ply_file" << endl;
+    cerr << "Usage: " << argv[0] << " ply_file modes_file" << endl;
     return 1;
   }
 
@@ -684,8 +619,8 @@ int main(int argc, char **argv)
   // create a copy of the face
   TriMesh *copy = new TriMesh();
   copyMesh(mesh, copy);
-  //scale(copy, -1, 1, 1);
-  //faceflip(copy);
+  scale(copy, -1, 1, 1);
+  faceflip(copy);
   copy->need_normals();
   copy->need_tstrips();
   copy->need_bsphere();
@@ -705,6 +640,38 @@ int main(int argc, char **argv)
   mesh->need_dcurv();
   copy->need_dcurv();
 
+  // read transform from modes file
+  if (argc > 2) {
+    ifstream fin(argv[2]);
+    float f;
+    fin >> f;  // discard first input
+    vec angles;
+    vec t;
+    fin >> angles[0] >> angles[1] >> angles[2];
+    fin >> t[0] >> t[1] >> t[2];
+    angles /= 100.0f;
+    mode = EulerMatrix(angles);
+    mode = xform::trans(t[0], t[1], t[2]) * mode;
+    // for (int m = 0; m < 6; ++m) {
+    //   if (m%4 == 3) continue;
+    //   fin >> f;
+    //   if (m < 12) f /= 100;
+    //   mode[m] = f;
+    // }
+    // cout << "mode = " << mode << endl;
+
+    TriMesh *tmesh = new TriMesh();
+    copyMesh(mesh, tmesh);
+    apply_xform(tmesh, mode);
+    tmesh->need_normals();
+    tmesh->need_tstrips();
+    tmesh->need_bsphere();
+    xffilenames.push_back("test.xf");
+    xforms.push_back(xform());
+    visible.push_back(true);
+    meshes.push_back(tmesh);
+  }
+
   TriMesh *tr = new TriMesh();
   copyMesh(mesh, tr);
   xform x;
@@ -714,8 +681,12 @@ int main(int argc, char **argv)
 
   tr->need_normals();
   tr->need_curvatures();
-  xform y = get_xform2(mesh, tr, 1010, 1010);
+  xform y = get_xform(mesh, tr, 1010, 1010);
   cout << y << endl;
+
+  vec angles = EulerAngles(y);
+  xform z = EulerMatrix(angles);
+  cout << z << endl;
 
   glutCreateWindow(argv[1]);
   glutDisplayFunc(redraw);

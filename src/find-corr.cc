@@ -9,15 +9,38 @@
 #include <string>
 #include <iostream>
 #include <set>
+#include "common.h"
 
 using namespace std;
 
 string projname;
 
-void copyMesh(const TriMesh* src, TriMesh* dest) {
-  // For now, we just copy the faces and vertices.
-  dest->vertices = src->vertices;
-  dest->faces = src->faces;
+
+// Signature using euler's angles
+vector<float> xform_sig(xform x, float scale) {
+  vec angles = EulerAngles(x);
+  vector<float> sig;
+
+  sig.push_back(angles[0] * scale);
+  sig.push_back(angles[1] * scale);
+  sig.push_back(angles[2] * scale);
+  sig.push_back(x[12]);
+  sig.push_back(x[13]);
+  sig.push_back(x[14]);
+  return sig;
+}
+
+// Signature using complete matrix params
+vector<float> xform_sig_old(xform x, float scale) {
+  vector<float> sig;
+
+  for (int m = 0; m < 16; ++m) {
+    if (m % 4 == 3) continue;
+    float o = x[m];
+    if (m < 12) o *= scale;
+    sig.push_back(0);
+  }
+  return sig;
 }
 
 int main(int argc, char **argv)
@@ -61,6 +84,12 @@ int main(int argc, char **argv)
   mesh->need_curvatures();
   copy->need_curvatures();
 
+  float smoothsigma = 5.0;
+  smoothsigma *= mesh->feature_size();
+  cout << "feature size " << mesh->feature_size() << endl;
+  diffuse_curv(mesh, smoothsigma);
+  diffuse_curv(copy, smoothsigma);
+
   // read samples
   ifstream fin(argv[2]);
   vector<int> samples;
@@ -83,7 +112,7 @@ int main(int argc, char **argv)
   // compute correspondences
   int nv = mesh->vertices.size();
   int nmatches = 0;
-  float eps = .0005;
+  float eps = .005;
 
   // output file for correspondences and transformations
   string corrfile = projname + "-corr.txt";
@@ -95,39 +124,29 @@ int main(int argc, char **argv)
     int i = *iter;
     float ak1 = mesh->curv1[i];
     float ak2 = mesh->curv2[i];
-    //ak1 = ak1 / sqrt(1 + ak1 * ak1);
-    //ak2 = ak2 / sqrt(1 + ak2 * ak2);
-    for (int j = 0; j < nv; ++j) {
+    ak1 = ak1 / sqrt(1 + ak1 * ak1);
+    ak2 = ak2 / sqrt(1 + ak2 * ak2);
+    //for (int j = 0; j < nv; ++j) {
+    for (int iter2 = 0; iter2 < samples.size(); ++iter2) {
+      int j = samples[iter2];
       if (i == j) continue;
       float bk1 = copy->curv1[j];
       float bk2 = copy->curv2[j];
-      //bk1 = bk1 / sqrt(1 + bk1 * bk1);
-      //bk2 = bk2 / sqrt(1 + bk2 * bk2);
+      bk1 = bk1 / sqrt(1 + bk1 * bk1);
+      bk2 = bk2 / sqrt(1 + bk2 * bk2);
       if (abs(ak1-bk1) < eps && abs(ak2-bk2) < eps) {
         nmatches++;
         //printf("m: %f %f - %f %f (%d %d)\n", ak1, ak2, bk1, bk2, i, j);
         fcorr << i << " " << j << endl;
-        vec t = mesh->vertices[i] - copy->vertices[j];
-        xform r1(copy->pdir1[j][0], copy->pdir1[j][1], copy->pdir1[j][2], 0,
-                 copy->pdir2[j][0], copy->pdir2[j][1], copy->pdir2[j][2], 0,
-                 copy->normals[j][0], copy->normals[j][1], copy->normals[j][2], 0,
-                 0, 0, 0, 1);
-        r1 = inv(r1);
-        xform r2(mesh->pdir1[i][0], mesh->pdir1[i][1], mesh->pdir1[i][2], 0,
-                 mesh->pdir2[i][0], mesh->pdir2[i][1], mesh->pdir2[i][2], 0,
-                 mesh->normals[i][0], mesh->normals[i][1], mesh->normals[i][2], 0,
-                 0, 0, 0, 1);
-        xform comp = r1*r2*xform::trans(t[0], t[1], t[2]);
-        for (int m = 0; m < 16; ++m) {
-          if (m%4 == 3) continue;
-          float o = comp[m];
-          if (m < 12) o *= 100;
-          ftrans << o << " ";
+        xform comp = get_xform(mesh, copy, i, j);
+        vector<float> sig = xform_sig(comp, 100);
+        for (int m = 0; m < sig.size(); ++m) {
+          ftrans << sig[m] << " ";
         }
         ftrans << endl;
       }
     }
   }
   printf("\nnmatches: %d/%d\n", nmatches, nv * 1000);
-  printf("%d %d\n", nmatches, 12);
+  printf("echo %d %d >\n ", nmatches, 12);
 }

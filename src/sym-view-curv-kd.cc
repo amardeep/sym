@@ -230,6 +230,11 @@ void draw_mesh(int i)
 
         const TriMesh* m1 = themesh;
         int j = corrindex;
+        float k1 = m1->curv1[corr[j].first];
+        float k2 = m1->curv2[corr[j].first];
+        printf("curv: %f %f\n", k1, k2);
+        if (abs(k2/k1) > .75) cout << "discard" << endl;
+
         while(true) {
           int a = corr[j].first;
           int b = corr[j].second;
@@ -252,8 +257,8 @@ void draw_mesh(int i)
           glTranslatef(m1->vertices[a][0],
                        m1->vertices[a][1],
                        m1->vertices[a][2]);
-          //glutSolidSphere(4, 20, 20);
-          glutSolidSphere(.004, 20, 20);
+          glutSolidSphere(4, 20, 20);
+          //glutSolidSphere(.004, 20, 20);
           //glutSolidSphere(40, 20, 20);
           //cout << m1->vertices[a] << endl;
           glPopMatrix();
@@ -265,7 +270,7 @@ void draw_mesh(int i)
           glTranslatef(m1->vertices[b][0],
                        m1->vertices[b][1],
                        m1->vertices[b][2]);
-          glutSolidSphere(.004, 20, 20);
+          glutSolidSphere(4, 20, 20);
           glPopMatrix();
           ++j;
           if (j >= corr.size()) j=0;
@@ -686,9 +691,10 @@ int main(int argc, char **argv)
   //lmsmooth(mesh, 50);
 
   mesh->need_curvatures();
-  float smoothsigma = 2.0;
+  float smoothsigma = 3.0;
   smoothsigma *= mesh->feature_size();
-  //diffuse_curv(mesh, smoothsigma);
+  cout << "feature size " << mesh->feature_size() << endl;
+  diffuse_curv(mesh, smoothsigma);
 
   mesh->need_normals();
   mesh->need_tstrips();
@@ -727,7 +733,7 @@ int main(int argc, char **argv)
   copy->need_curvatures();
   //mesh->need_dcurv();
   //copy->need_dcurv();
-  //diffuse_curv(copy, smoothsigma);
+  diffuse_curv(copy, smoothsigma);
   for (int i = 0; i < mesh->vertices.size(); ++i) {
     if (i > 10) break;
 
@@ -772,17 +778,19 @@ int main(int argc, char **argv)
     pdash.insert(index);
   }
 
-  // no, lets pick samples
-  //ifstream fin("sample.txt");
-  //pdash.clear();
-  //while(fin >> index) {
-  //pdash.insert(index);
-  //}
+  //no, lets pick samples
+  ifstream fin("sample.txt");
+  vector<int> samples;
+  pdash.clear();
+  while(fin >> index) {
+    pdash.insert(index);
+    samples.push_back(index);
+  }
 
+  //float eps = .0001;
   // create kd tree from curvature values
   // ANNkd_tree* tree = create_kdtree(mesh);
   // set<pair<int, int> > scorr;
-  float eps = .00001;
   // ofstream fout("o.txt");
   // ofstream fcluster("m.txt");
   // TriMesh *m = mesh;
@@ -838,20 +846,28 @@ int main(int argc, char **argv)
   //   //printf("%d %d\n", i, j);
   // }
 
+  float eps = .002;
+  int num = 0;
   for (set<int>::iterator iter = pdash.begin(); iter != pdash.end(); ++iter) {
     int i = *iter;
+    num++;
+    if (num > 200) break;
     float ak1 = mesh->curv1[i];
     float ak2 = mesh->curv2[i];
     ak1 = ak1 / sqrt(1 + ak1 * ak1);
     ak2 = ak2 / sqrt(1 + ak2 * ak2);
-    for (int j = 0; j < nv; ++j) {
+    if (abs(ak2/ak1) > .75) continue;
+    //for (int j = 0; j < nv; ++j) {
+    for (int iter2 = 0; iter2 < samples.size(); ++iter2) {
+      int j = samples[iter2];
       float bk1 = mesh->curv1[j];
       float bk2 = mesh->curv2[j];
       bk1 = bk1 / sqrt(1 + bk1 * bk1);
       bk2 = bk2 / sqrt(1 + bk2 * bk2);
       float dist;
-      dist = abs(ak1-bk1) < eps && abs(ak2-bk2);
-      dist = sqrt((ak1-bk1)*(ak1-bk1) + (ak2-bk2)*(ak2-bk2));
+      dist = abs(ak1-bk1) + abs(ak2-bk2);
+      //dist = sqrt((ak1-bk1)*(ak1-bk1) + (ak2-bk2)*(ak2-bk2));
+      //dist = abs(ak1*bk1 - ak2*bk2);
       if (dist < eps) {
         nmatches++;
         //printf("m: %f %f - %f %f (%d %d)\n", ak1, ak2, bk1, bk2, i, j);
