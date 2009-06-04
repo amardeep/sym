@@ -84,7 +84,7 @@ int main(int argc, char **argv)
   mesh->need_curvatures();
   copy->need_curvatures();
 
-  float smoothsigma = 5.0;
+  float smoothsigma = 2.0;
   smoothsigma *= mesh->feature_size();
   cout << "feature size " << mesh->feature_size() << endl;
   diffuse_curv(mesh, smoothsigma);
@@ -112,13 +112,15 @@ int main(int argc, char **argv)
   // compute correspondences
   int nv = mesh->vertices.size();
   int nmatches = 0;
-  float eps = .005;
+  float eps = .00005;
 
   // output file for correspondences and transformations
   string corrfile = projname + "-corr.txt";
   string transfile = projname + "-trans.txt";
   ofstream fcorr(corrfile.c_str());
   ofstream ftrans(transfile.c_str());
+
+  vector<vector<float> > vtrans;
 
   for (set<int>::iterator iter = pdash.begin(); iter != pdash.end(); ++iter) {
     int i = *iter;
@@ -134,19 +136,27 @@ int main(int argc, char **argv)
       float bk2 = copy->curv2[j];
       bk1 = bk1 / sqrt(1 + bk1 * bk1);
       bk2 = bk2 / sqrt(1 + bk2 * bk2);
-      if (abs(ak1-bk1) < eps && abs(ak2-bk2) < eps) {
+      //dist = abs(ak1-bk1) + abs(ak2-bk2);
+      float dist = sqrt((ak1-bk1)*(ak1-bk1) + (ak2-bk2)*(ak2-bk2));
+      if (dist < eps) {
         nmatches++;
         //printf("m: %f %f - %f %f (%d %d)\n", ak1, ak2, bk1, bk2, i, j);
         fcorr << i << " " << j << endl;
         xform comp = get_xform(mesh, copy, i, j);
         vector<float> sig = xform_sig(comp, 100);
-        for (int m = 0; m < sig.size(); ++m) {
-          ftrans << sig[m] << " ";
-        }
-        ftrans << endl;
+        vtrans.push_back(sig);
       }
     }
   }
+
+  // write transform signatures to file
+  ftrans << vtrans.size() << " " << 6 << endl;
+  for (int i = 0; i < vtrans.size(); ++i) {
+    for (int m = 0; m < 6; ++m) {
+      ftrans << vtrans[i][m] << " ";
+    }
+    ftrans << endl;
+  }
+
   printf("\nnmatches: %d/%d\n", nmatches, nv * 1000);
-  printf("echo %d %d >\n ", nmatches, 12);
 }

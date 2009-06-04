@@ -80,4 +80,26 @@ xform EulerMatrix(vec angles){
   return zrot * yrot * xrot;
 }
 
+// Read modes from file
+void read_modes(const char* filename, float scale, vector<xform>* modes) {
+  using namespace std;
+
+  ifstream fin(filename);
+
+  float ignore;
+  vec angles;
+  vec t;
+
+  while(true) {
+    fin >> ignore >> angles[0] >> angles[1] >> angles[2]
+        >> t[0] >> t[1] >> t[2];
+    if (!fin.good()) break;
+
+    angles /= scale;
+    xform mode = EulerMatrix(angles);
+    mode = xform::trans(t[0], t[1], t[2]) * mode;
+    modes->push_back(mode);
+  }
+}
+
 #endif

@@ -20,9 +20,6 @@ vector<xform> xforms;
 vector<bool> visible;
 vector<string> xffilenames;
 
-vector<pair<int, int> > corr;
-int corrindex = 0;
-
 TriMesh::BSphere global_bsph;
 xform global_xf;
 GLCamera camera;
@@ -37,7 +34,10 @@ bool draw_falsecolor = false;
 bool draw_index = false;
 bool white_bg = false;
 
-xform mode;
+vector<xform> modes;
+int current_mode = -1;
+// index of mesh which is used to show symmetry transform
+int sym_index = -1;
 
 // Make some mesh current
 void set_current(int i)
@@ -155,6 +155,11 @@ void draw_mesh(int i)
 	glPushMatrix();
 	glMultMatrixd(xforms[i]);
 
+        if (i == sym_index && current_mode >= 0 &&
+            current_mode < modes.size()) {
+          glMultMatrixd(modes[current_mode]);
+        }
+
 	glDepthFunc(GL_LESS);
 	glEnable(GL_DEPTH_TEST);
 
@@ -246,29 +251,6 @@ void redraw()
     setup_lighting(i);
     draw_mesh(i);
   }
-  glBegin(GL_POINTS);
-  glPointSize(10);
-  TriMesh* m1 = meshes.at(0);
-  TriMesh* m2 = meshes.at(1);
-  glClear (GL_COLOR_BUFFER_BIT);
-  glColor3f (.5, .5, 1.0);
-  for (int i = corrindex; i < corrindex + 10; ++i) {
-    if (i >= corr.size()) break;
-    int a = corr[i].first;
-    int b = corr[i].second;
-    //glVertex3f(m1->vertices[a][0], m1->vertices[a][1], m1->vertices[a][2]);
-    //glVertex3f(m2->vertices[b][0], m2->vertices[b][1], m2->vertices[b][2]);
-    glPushMatrix();
-    glTranslatef(m1->vertices[a][0], m1->vertices[a][1], m1->vertices[a][2]);
-    glutSolidSphere(5, 20, 20);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(m2->vertices[b][0], m2->vertices[b][1], m2->vertices[b][2]);
-    glutSolidSphere(5, 20, 20);
-    glPopMatrix();
-  }
-  glEnd();
-
   glPopMatrix();
   glutSwapBuffers();
   printf("\r                        \r%.1f msec.", 1000.0f * (now() - t));
@@ -548,8 +530,14 @@ void keyboardfunc(unsigned char key, int x, int y)
     case 'e':
       draw_edges = !draw_edges; break;
     case 'u':
-      corrindex += 10;
-      if (corrindex >= corr.size()) corrindex = 0;
+      current_mode += 1;
+      if (current_mode >= modes.size()) current_mode = -1;
+      printf("current mode = %d / %d\n", current_mode, modes.size());
+      break;
+    case 'y':
+      current_mode = -1;
+      if (current_mode < -1) current_mode = modes.size() - 1;
+      printf("current mode = %d / %d\n", current_mode, modes.size());
       break;
     case 'f':
       draw_falsecolor = !draw_falsecolor; break;
@@ -642,16 +630,18 @@ int main(int argc, char **argv)
 
   // read transform from modes file
   if (argc > 2) {
-    ifstream fin(argv[2]);
-    float f;
-    fin >> f;  // discard first input
-    vec angles;
-    vec t;
-    fin >> angles[0] >> angles[1] >> angles[2];
-    fin >> t[0] >> t[1] >> t[2];
-    angles /= 100.0f;
-    mode = EulerMatrix(angles);
-    mode = xform::trans(t[0], t[1], t[2]) * mode;
+    read_modes(argv[2], 100, &modes);
+    printf("read %d modes\n", modes.size());
+
+    // float f;
+    // fin >> f;  // discard first input
+    // vec angles;
+    // vec t;
+    // fin >> angles[0] >> angles[1] >> angles[2];
+    // fin >> t[0] >> t[1] >> t[2];
+    // angles /= 100.0f;
+    // mode = EulerMatrix(angles);
+    // mode = xform::trans(t[0], t[1], t[2]) * mode;
     // for (int m = 0; m < 6; ++m) {
     //   if (m%4 == 3) continue;
     //   fin >> f;
@@ -662,7 +652,7 @@ int main(int argc, char **argv)
 
     TriMesh *tmesh = new TriMesh();
     copyMesh(mesh, tmesh);
-    apply_xform(tmesh, mode);
+    //apply_xform(tmesh, mode);
     tmesh->need_normals();
     tmesh->need_tstrips();
     tmesh->need_bsphere();
@@ -670,6 +660,7 @@ int main(int argc, char **argv)
     xforms.push_back(xform());
     visible.push_back(true);
     meshes.push_back(tmesh);
+    sym_index = meshes.size() - 1;
   }
 
   TriMesh *tr = new TriMesh();

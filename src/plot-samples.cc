@@ -233,7 +233,7 @@ void draw_mesh(int i)
           glTranslatef(themesh->vertices[a][0],
                        themesh->vertices[a][1],
                        themesh->vertices[a][2]);
-          glutSolidSphere(1, 20, 20);
+          glutSolidSphere(.001, 20, 20);
           glPopMatrix();
         }
 
