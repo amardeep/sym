@@ -11,6 +11,7 @@
 #include <set>
 #include <limits>
 #include "ANN.h"
+#include "common.h"
 
 using namespace std;
 
@@ -72,48 +73,6 @@ void need_redraw()
 {
 	glutPostRedisplay();
 }
-
-
-ANNkd_tree* create_kdtree(TriMesh* mesh) {
-  int nv = mesh->vertices.size();
-  // compute kd tree for curvature values
-  ANNpointArray points = annAllocPts(nv, 2);
-  // fill point memory
-  for (int row = 0; row < nv; ++row) {
-    float k1 = mesh->curv1[row];
-    float k2 = mesh->curv2[row];
-    //k1 = k1 / sqrt(1 + k1 * k1);
-    //k2 = k2 / sqrt(1 + k2 * k2);
-    points[row][0] = k1;
-    points[row][1] = k2;
-  }
-  // create kd-tree
-  return new ANNkd_tree(points, nv, 2);
-}
-
-
-void nearest_neighbors(ANNkd_tree* kdtree, TriMesh* mesh, int row, float rad,
-                      vector<int>* matches) {
-  // copy row into annpoint
-  ANNpoint point = annAllocPt(2);
-  point[0] = mesh->curv1[row];
-  point[1] = mesh->curv2[row];
-
-  // search in kdtree
-  ANNidxArray idx = new ANNidx[kdnn];
-  ANNdistArray dists = new ANNdist[kdnn];
-  kdtree->annkFRSearch(point, rad, kdnn, idx, dists);
-
-  for (int i = 0; i < kdnn; ++i) {
-    if (idx[i] == ANN_NULL_IDX) break;
-    matches->push_back(idx[i]);
-    cout << idx[i] << endl;
-  }
-
-  delete[] idx;
-  delete[] dists;
-}
-
 
 // Clear the screen
 void cls()
@@ -207,7 +166,7 @@ void draw_sample(TriMesh* m, int i) {
   glPopMatrix();
 
   // get nearest neighbours
-  nearest_neighbors(kdtree, m, i, kdradius, &matches);
+  nearest_neighbors(kdtree, m, i, kdradius, kdnn, &matches);
   int num = matches.size();
   if (match_index > num) {
     match_index = -1;
@@ -226,7 +185,8 @@ void draw_sample(TriMesh* m, int i) {
     float e2 = v DOT (m->pdir1[i] + m->pdir1[j]);
     float e3 = v DOT (m->pdir2[i] + m->pdir2[j]);
     float e = sqrt(e1*e1 + e2*e2 + e3*e3);
-    cout << "error: " << e << endl;
+
+    if (iter == match_index) cout << "error: " << e << endl;
 
     glPushMatrix();
     float rad = m->feature_size();
@@ -352,7 +312,7 @@ void draw_mesh(int i)
         // }
         // glColor3f (1, 1, 1.0);
 
-        draw_sample(meshes[i], current_sample);
+        draw_sample(meshes[i], pdash[current_sample]);
 	glPopMatrix();
 }
 
@@ -702,28 +662,6 @@ void keyboardfunc(unsigned char key, int x, int y)
 }
 
 
-void copyMesh(const TriMesh* src, TriMesh* dest) {
-  // For now, we just copy the faces and vertices.
-  dest->vertices = src->vertices;
-  dest->faces = src->faces;
-}
-
-xform get_xform(TriMesh* m, TriMesh* c, int i, int j) {
-  vec t = m->vertices[i] - c->vertices[j];
-  xform r1(c->pdir1[j][0], c->pdir1[j][1], c->pdir1[j][2], 0,
-           c->pdir2[j][0], c->pdir2[j][1], c->pdir2[j][2], 0,
-           c->normals[j][0], c->normals[j][1], c->normals[j][2], 0,
-           0, 0, 0, 1);
-  r1 = inv(r1);
-  xform r2(m->pdir1[i][0], m->pdir1[i][1], m->pdir1[i][2], 0,
-           m->pdir2[i][0], m->pdir2[i][1], m->pdir2[i][2], 0,
-           m->normals[i][0], m->normals[i][1], m->normals[i][2], 0,
-           0, 0, 0, 1);
-  xform comp = r1*r2*xform::trans(t[0], t[1], t[2]);
-  return comp;
-}
-
-
 int main(int argc, char **argv)
 {
   glutInitWindowSize(512, 512);
@@ -731,7 +669,7 @@ int main(int argc, char **argv)
   glutInit(&argc, argv);
 
   if (argc < 2) {
-    cerr << "Usage: " << argv[0] << " ply_file" << endl;
+    cerr << "Usage: " << argv[0] << " ply_file sample_file" << endl;
     return 1;
   }
 
@@ -814,116 +752,18 @@ int main(int argc, char **argv)
     pdash.push_back(index);
   }
 
-  //no, lets pick samples
-  // ifstream fin("sample.txt");
-  // vector<int> samples;
-  // pdash.clear();
-  // while(fin >> index) {
-  //   pdash.insert(index);
-  //   samples.push_back(index);
-  // }
-
-  float eps = .0001;
-  //create kd tree from curvature values
+  // no, lets pick samples
+  if (argc > 2) {
+    ifstream fin(argv[2]);
+    pdash.clear();
+    while(fin >> index) {
+      pdash.push_back(index);
+    }
+    cout << "sample size " << pdash.size() << endl;
+  }
+  // Uncomment one to just use samples to create kdtree or whole mesh
+  //kdtree = create_kdtree(mesh, pdash);
   kdtree = create_kdtree(mesh);
-  // set<pair<int, int> > scorr;
-  // TriMesh *m = mesh;
-  // for (set<int>::iterator iter = pdash.begin(); iter != pdash.end(); ++iter) {
-  //   int i = *iter;
-  //   vector<int> matches;
-  //   nearest_neighbors(tree, mesh, i, eps, &matches);
-  //   for (int iter2 = 0; iter2 < matches.size(); ++iter2) {
-  //     int j = matches[iter2];
-  //     if (i < j) {
-  //       scorr.insert(make_pair(i, j));
-  //     } else {
-  //       scorr.insert(make_pair(j, i));
-  //     }
-  //     corr.push_back(make_pair(i, j));
-
-  //     vec v1 = m->vertices[i];
-  //     vec v2 = m->vertices[j];
-  //     vec vd = v2 - v1;
-  //     float lvd = len(vd);
-  //     vec v = normalize(vd);
-  //     float e1 = v DOT (m->normals[i] + m->normals[j]);
-  //     float e2 = v DOT (m->pdir1[i] + m->pdir1[j]);
-  //     float e3 = v DOT (m->pdir2[i] + m->pdir2[j]);
-  //     float e = sqrt(e1*e1 + e2*e2 + e3*e3);
-
-  //     if (e > 1.5) continue;
-  //     vec c = ((v1 DOT v) + lvd/2) * v;
-  //     fout << c[0] << " " << c[1] << " " << c[2] << endl;
-
-  //     xform comp = get_xform(mesh, copy, i , j);
-  //     cout << "here" << endl;
-  //     for (int m = 0; m < 16; ++m) {
-  //       if (m%4 == 3) continue;
-  //       float o = comp[m];
-  //       //if (m < 12) o *= 100;
-  //       fcluster << o << " ";
-  //     }
-  //     fcluster << endl;
-
-  //   }
-  // }
-  // printf("corr: %d %d\n", corr.size(), scorr.size());
-
-
-  // compute correspondences
-  int nmatches = 0;
-
-  // for (set<pair<int, int> >::iterator iter = scorr.begin();
-  //      iter != scorr.end(); ++iter) {
-  //   int i = iter->first;
-  //   int j = iter->second;
-  //   //printf("%d %d\n", i, j);
-  // }
-
-  // float eps = .0005;
-  // int num = 0;
-  // for (set<int>::iterator iter = pdash.begin(); iter != pdash.end(); ++iter) {
-  //   int i = *iter;
-  //   num++;
-  //   if (num > 200) break;
-  //   float ak1 = mesh->curv1[i];
-  //   float ak2 = mesh->curv2[i];
-  //   ak1 = ak1 / sqrt(1 + ak1 * ak1);
-  //   ak2 = ak2 / sqrt(1 + ak2 * ak2);
-  //   if (abs(ak2/ak1) > .75) continue;
-  //   //for (int j = 0; j < nv; ++j) {
-  //   for (int iter2 = 0; iter2 < samples.size(); ++iter2) {
-  //     int j = samples[iter2];
-  //     float bk1 = mesh->curv1[j];
-  //     float bk2 = mesh->curv2[j];
-  //     bk1 = bk1 / sqrt(1 + bk1 * bk1);
-  //     bk2 = bk2 / sqrt(1 + bk2 * bk2);
-  //     float dist;
-  //     //dist = abs(ak1-bk1) + abs(ak2-bk2);
-  //     dist = sqrt((ak1-bk1)*(ak1-bk1) + (ak2-bk2)*(ak2-bk2));
-  //     //dist = abs(ak1*bk1 - ak2*bk2);
-  //     if (dist < eps) {
-  //       nmatches++;
-  //       //printf("m: %f %f - %f %f (%d %d)\n", ak1, ak2, bk1, bk2, i, j);
-  //       corr.push_back(make_pair(i, j));
-  //       vec t = mesh->vertices[i] - copy->vertices[j];
-  //       xform r1(copy->pdir1[j][0], copy->pdir1[j][1], copy->pdir1[j][2], 0,
-  //                copy->pdir2[j][0], copy->pdir2[j][1], copy->pdir2[j][2], 0,
-  //                copy->normals[j][0], copy->normals[j][1], copy->normals[j][2], 0,
-  //                0, 0, 0, 1);
-  //       r1 = inv(r1);
-  //       xform r2(mesh->pdir1[i][0], mesh->pdir1[i][1], mesh->pdir1[i][2], 0,
-  //                mesh->pdir2[i][0], mesh->pdir2[i][1], mesh->pdir2[i][2], 0,
-  //                mesh->normals[i][0], mesh->normals[i][1], mesh->normals[i][2], 0,
-  //                0, 0, 0, 1);
-  //       xform comp = r1*r2*xform::trans(t[0], t[1], t[2]);
-  //       //cout << t << endl;
-  //     }
-  //   }
-  // }
-  // printf("\nnmatches: %d/%d\n", nmatches, nv * 1000);
-
-
 
   glutCreateWindow(argv[1]);
   glutDisplayFunc(redraw);

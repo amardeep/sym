@@ -12,6 +12,7 @@
 #include <string>
 #include <iostream>
 #include <set>
+#include "ANN.h"
 
 
 void copyMesh(const TriMesh* src, TriMesh* dest) {
@@ -126,7 +127,7 @@ ANNkd_tree* create_kdtree(TriMesh* mesh) {
 
 // Creates a kd tree from curvature values.
 // Restrict to vertices from samples.
-ANNkd_tree* create_kdtree(TriMesh* mesh, vector<int> samples) {
+ANNkd_tree* create_kdtree(TriMesh* mesh, const vector<int>& samples) {
   int nv = samples.size();
   // compute kd tree for curvature values
   ANNpointArray points = annAllocPts(nv, 2);
@@ -137,8 +138,8 @@ ANNkd_tree* create_kdtree(TriMesh* mesh, vector<int> samples) {
     float k2 = mesh->curv2[row];
     //k1 = k1 / sqrt(1 + k1 * k1);
     //k2 = k2 / sqrt(1 + k2 * k2);
-    points[row][0] = k1;
-    points[row][1] = k2;
+    points[iter][0] = k1;
+    points[iter][1] = k2;
   }
   // create kd-tree
   return new ANNkd_tree(points, nv, 2);
@@ -161,7 +162,6 @@ void nearest_neighbors(ANNkd_tree* kdtree, TriMesh* mesh, int row,
   for (int i = 0; i < num_matches; ++i) {
     if (idx[i] == ANN_NULL_IDX) break;
     matches->push_back(idx[i]);
-    cout << idx[i] << endl;
   }
 
   delete[] idx;
