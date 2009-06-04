@@ -102,4 +102,71 @@ void read_modes(const char* filename, float scale, vector<xform>* modes) {
   }
 }
 
+
+// Creates a kd tree from curvature values.
+ANNkd_tree* create_kdtree(TriMesh* mesh) {
+  int nv = mesh->vertices.size();
+  // compute kd tree for curvature values
+  ANNpointArray points = annAllocPts(nv, 2);
+  // fill point memory
+  for (int row = 0; row < nv; ++row) {
+    float k1 = mesh->curv1[row];
+    float k2 = mesh->curv2[row];
+    // NOTE(amardeep): In my experience, uncommenting below resulted
+    // in worse experience
+    //k1 = k1 / sqrt(1 + k1 * k1);
+    //k2 = k2 / sqrt(1 + k2 * k2);
+    points[row][0] = k1;
+    points[row][1] = k2;
+  }
+  // create kd-tree
+  return new ANNkd_tree(points, nv, 2);
+}
+
+
+// Creates a kd tree from curvature values.
+// Restrict to vertices from samples.
+ANNkd_tree* create_kdtree(TriMesh* mesh, vector<int> samples) {
+  int nv = samples.size();
+  // compute kd tree for curvature values
+  ANNpointArray points = annAllocPts(nv, 2);
+  // fill point memory
+  for (int iter = 0; iter < nv; ++iter) {
+    int row = samples[iter];
+    float k1 = mesh->curv1[row];
+    float k2 = mesh->curv2[row];
+    //k1 = k1 / sqrt(1 + k1 * k1);
+    //k2 = k2 / sqrt(1 + k2 * k2);
+    points[row][0] = k1;
+    points[row][1] = k2;
+  }
+  // create kd-tree
+  return new ANNkd_tree(points, nv, 2);
+}
+
+
+void nearest_neighbors(ANNkd_tree* kdtree, TriMesh* mesh, int row,
+                       float rad, int num_matches,
+                       vector<int>* matches) {
+  // copy row into annpoint
+  ANNpoint point = annAllocPt(2);
+  point[0] = mesh->curv1[row];
+  point[1] = mesh->curv2[row];
+
+  // search in kdtree
+  ANNidxArray idx = new ANNidx[num_matches];
+  ANNdistArray dists = new ANNdist[num_matches];
+  kdtree->annkFRSearch(point, rad, num_matches, idx, dists);
+
+  for (int i = 0; i < num_matches; ++i) {
+    if (idx[i] == ANN_NULL_IDX) break;
+    matches->push_back(idx[i]);
+    cout << idx[i] << endl;
+  }
+
+  delete[] idx;
+  delete[] dists;
+}
+
+
 #endif
