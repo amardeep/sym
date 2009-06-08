@@ -12,7 +12,6 @@
 #include <limits>
 #include "ANN.h"
 #include "common.h"
-#include <argp.h>
 
 using namespace std;
 
