@@ -45,7 +45,7 @@ void sample_mesh(TriMesh *mesh, float grid_div,
   float gs = min(xs, min(ys, zs)) / grid_div;
 
   printf("xs %f, ys %f, zs %f, gs %f\n", xs, ys, zs, gs);
-  printf("grid: %d x %d x %d\n", ceil(xs/gs), ceil(ys/gs), ceil(zs/gs));
+  printf("grid: %f x %f x %f\n", ceil(xs/gs), ceil(ys/gs), ceil(zs/gs));
 
   long gx, gy, gz;
   point gc;  // grid center
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
 
   map<vector<int>, int> samples;
 
-  sample_mesh(mesh, 72, samples);
+  sample_mesh(mesh, 80, samples);
 
   string ofname = projname + "-sample.txt";
   ofstream fout(ofname.c_str());

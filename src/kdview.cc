@@ -12,6 +12,7 @@
 #include <limits>
 #include "ANN.h"
 #include "common.h"
+#include <argp.h>
 
 using namespace std;
 
@@ -46,6 +47,10 @@ bool draw_falsecolor = false;
 bool draw_index = false;
 bool white_bg = false;
 
+bool samples_only = false;
+bool use_kdtree = true;
+char* samplesfile = 0;
+char* plyfile = 0;
 
   // Make some mesh current
 void set_current(int i)
@@ -157,12 +162,13 @@ void draw_sample(TriMesh* m, int i) {
   vector<int> matches;
 
   // draw point at i
+  float rad = m->feature_size();
   glPushMatrix();
   glColor4f (.5, .5, 1.0, .6);
   glTranslatef(m->vertices[i][0],
                m->vertices[i][1],
                m->vertices[i][2]);
-  glutSolidSphere(m->feature_size()*2, 20, 20);
+  glutSolidSphere(rad*2, 20, 20);
   glPopMatrix();
 
   // get nearest neighbours
@@ -188,8 +194,8 @@ void draw_sample(TriMesh* m, int i) {
 
     if (iter == match_index) cout << "error: " << e << endl;
 
-    glPushMatrix();
     float rad = m->feature_size();
+    glPushMatrix();
     glColor4f (1, .5, .5, .6);
     if (e < 1.5) {
       glColor4f (.5, 1, .5, .6);
@@ -283,34 +289,6 @@ void draw_mesh(int i)
 		draw_tstrips(themesh);
 		glPolygonMode(GL_FRONT, GL_FILL);
 	}
-
-        // const TriMesh* m1 = themesh;
-        // int j = corrindex;
-        // float k1 = m1->curv1[corr[j].first];
-        // float k2 = m1->curv2[corr[j].first];
-        // printf("curv: %f %f\n", k1, k2);
-        // if (abs(k2/k1) > .75) cout << "discard" << endl;
-
-        // while(true) {
-        //   int a = corr[j].first;
-        //   int b = corr[j].second;
-        //   if (a != corr[corrindex].first) {
-        //     corrindex = j;
-        //     break;
-        //   }
-
-        //   vec v1 = m1->vertices[a];
-        //   vec v2 = m1->vertices[b];
-        //   vec v = v1 - v2;
-        //   v = normalize(v);
-        //   float e1 = v DOT (m1->normals[a] + m1->normals[b]);
-        //   float e2 = v DOT (m1->pdir1[a] + m1->pdir1[b]);
-        //   float e3 = v DOT (m1->pdir2[b] + m1->pdir2[b]);
-        //   float e = sqrt(e1*e1 + e2*e2 + e3*e3);
-
-
-        // }
-        // glColor3f (1, 1, 1.0);
 
         draw_sample(meshes[i], pdash[current_sample]);
 	glPopMatrix();
@@ -661,9 +639,47 @@ void keyboardfunc(unsigned char key, int x, int y)
   need_redraw();
 }
 
+static char args_doc[] = "PLYFILE";
+
+static struct argp_option options[] = {
+  {"sample", 's', "FILE", OPTION_ARG_OPTIONAL, "Reads samples from FILE"},
+  {"only_samples", 'o', 0, OPTION_ARG_OPTIONAL, "Match samples only"},
+  {0}
+};
+
+
+static error_t parse_opt(int key, char* arg, struct argp_state* state) {
+  switch(key) {
+    case 'o':
+      samples_only = true;
+      break;
+    case 's':
+      samplesfile = arg;
+      break;
+    case ARGP_KEY_ARG:
+      if (state->arg_num >= 1) {
+        argp_usage(state);
+      }
+      plyfile = arg;
+      break;
+    case ARGP_KEY_END:
+      if (state->arg_num < 1) {
+        argp_usage(state);
+      }
+      break;
+    default:
+      return ARGP_ERR_UNKNOWN;
+  }
+  return 0;
+}
+
+static struct argp argp = {options, parse_opt, args_doc};
 
 int main(int argc, char **argv)
 {
+  argp_parse(&argp, argc, argv, 0, 0, 0);
+  return 0;
+
   glutInitWindowSize(512, 512);
   glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
   glutInit(&argc, argv);
@@ -680,9 +696,13 @@ int main(int argc, char **argv)
     cerr << "Unable to parse " << filename << endl;
   }
 
+  printf("before %d vertices\n", mesh->vertices.size());
+  smooth_mesh(mesh, .005);
+  printf("after %d vertices\n", mesh->vertices.size());
+
   mesh->need_curvatures();
 
-  float smoothsigma = 2.0;
+  float smoothsigma = 5.0;
   smoothsigma *= mesh->feature_size();
   cout << "feature size " << mesh->feature_size() << endl;
   //diffuse_curv(mesh, smoothsigma);
