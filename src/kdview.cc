@@ -639,47 +639,9 @@ void keyboardfunc(unsigned char key, int x, int y)
   need_redraw();
 }
 
-static char args_doc[] = "PLYFILE";
-
-static struct argp_option options[] = {
-  {"sample", 's', "FILE", OPTION_ARG_OPTIONAL, "Reads samples from FILE"},
-  {"only_samples", 'o', 0, OPTION_ARG_OPTIONAL, "Match samples only"},
-  {0}
-};
-
-
-static error_t parse_opt(int key, char* arg, struct argp_state* state) {
-  switch(key) {
-    case 'o':
-      samples_only = true;
-      break;
-    case 's':
-      samplesfile = arg;
-      break;
-    case ARGP_KEY_ARG:
-      if (state->arg_num >= 1) {
-        argp_usage(state);
-      }
-      plyfile = arg;
-      break;
-    case ARGP_KEY_END:
-      if (state->arg_num < 1) {
-        argp_usage(state);
-      }
-      break;
-    default:
-      return ARGP_ERR_UNKNOWN;
-  }
-  return 0;
-}
-
-static struct argp argp = {options, parse_opt, args_doc};
 
 int main(int argc, char **argv)
 {
-  argp_parse(&argp, argc, argv, 0, 0, 0);
-  return 0;
-
   glutInitWindowSize(512, 512);
   glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
   glutInit(&argc, argv);
