@@ -57,6 +57,8 @@ int main(int argc, char **argv)
     cerr << "Unable to parse " << filename << endl;
   }
 
+  // YYY
+  smooth_mesh(mesh, .005);
   mesh->need_normals();
 
   char* pname = argv[1];
@@ -103,7 +105,7 @@ int main(int argc, char **argv)
   set<int> pdash;
   int index = 0;
   int ss = samples.size();
-  while (pdash.size() < 3000) {
+  while (pdash.size() < 800) {
     int index = (int)((double)rand() / ((double)RAND_MAX + 1) * ss);
     pdash.insert(samples[index]);
   }
@@ -123,8 +125,9 @@ int main(int argc, char **argv)
   vector<vector<float> > vtrans;
 
   ANNkd_tree* kdtree = create_kdtree(mesh);
-  float kdradius = 50;
-  int kdnn = 30;
+  // YYY
+  float kdradius = 12.8;
+  int kdnn = 12;
 
   TriMesh *m = mesh;
   for (set<int>::iterator iter = pdash.begin(); iter != pdash.end(); ++iter) {
